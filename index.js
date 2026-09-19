@@ -18,8 +18,7 @@ const {
   joinVoiceChannel,
   createAudioPlayer,
   createAudioResource,
-  AudioPlayerStatus,
-  VoiceConnectionStatus
+  AudioPlayerStatus
 } = require("@discordjs/voice");
 
 const dgram = require("dgram");
@@ -42,7 +41,7 @@ const BOT_NAME = "Cubixorasmp Guard";
 const MC_IP = "cubixorasmp.play.hosting";
 const MC_BEDROCK_PORT = 19132;
 
-const guildSettings = new Map(); // guildId -> Ayarlar
+const guildSettings = new Map();
 
 function getSettings(guildId) {
   if (!guildSettings.has(guildId)) {
@@ -124,11 +123,12 @@ async function fetchBedrockPlayers() {
 }
 
 const slashCommands = [
+  new SlashCommandBuilder().setName("başlat").setDescription("Botu ses kanalına sokar ve müziği başlatır"),
+  new SlashCommandBuilder().setName("panel").setDescription("Gelişmiş müzik kontrol panelini açar"),
   new SlashCommandBuilder().setName("ticket-kur").setDescription("Destek talebi (ticket) sistemini kurar").addChannelOption(opt => opt.setName("kanal").setDescription("Ticket kanalı").addChannelTypes(ChannelType.GuildText).setRequired(true)),
   new SlashCommandBuilder().setName("dc-ceza").setDescription("Discord ceza log kanalını ayarlar").addChannelOption(opt => opt.setName("kanal").setDescription("Log kanalı").addChannelTypes(ChannelType.GuildText).setRequired(true)),
   new SlashCommandBuilder().setName("mc-ceza").setDescription("Minecraft ceza log kanalını ayarlar").addChannelOption(opt => opt.setName("kanal").setDescription("Log kanalı").addChannelTypes(ChannelType.GuildText).setRequired(true)),
-  new SlashCommandBuilder().setName("mcsohbet").setDescription("Minecraft oyuncu giriş-çıkış ve sohbet kanalını ayarlar").addChannelOption(opt => opt.setName("kanal").setDescription("Sohbet/Log kanalı").addChannelTypes(ChannelType.GuildText).setRequired(true)),
-  new SlashCommandBuilder().setName("panel").setDescription("Gelişmiş müzik kontrol panelini açar")
+  new SlashCommandBuilder().setName("mcsohbet").setDescription("Minecraft oyuncu giriş-çıkış ve sohbet kanalını ayarlar").addChannelOption(opt => opt.setName("kanal").setDescription("Sohbet/Log kanalı").addChannelTypes(ChannelType.GuildText).setRequired(true))
 ];
 
 client.once("ready", async () => {
@@ -149,45 +149,59 @@ client.once("ready", async () => {
   }, 30000);
 });
 
-// Otomatik Koruma (Küfür / Reklam)
+// Ortak Müzik Başlatma Fonksiyonu
+function startMusicPlayer(guild, member, replyMethod) {
+  const voiceChannel = member.voice.channel;
+  if (!voiceChannel) {
+    return replyMethod("Önce bir ses kanalına girmelisin!", true);
+  }
+
+  const settings = getSettings(guild.id);
+
+  try {
+    settings.connection = joinVoiceChannel({
+      channelId: voiceChannel.id,
+      guildId: guild.id,
+      adapterCreator: guild.voiceAdapterCreator,
+    });
+
+    settings.player = createAudioPlayer();
+    settings.connection.subscribe(settings.player);
+
+    function playSong() {
+      const currentSong = settings.musicQueue[settings.currentIndex];
+      const resource = createAudioResource(currentSong.url);
+      settings.player.play(resource);
+      settings.isPlaying = true;
+    }
+
+    playSong();
+    replyMethod("🎶 Müzik sistemi başlatıldı ve çalmaya başladı!");
+
+    settings.player.on(AudioPlayerStatus.Idle, () => {
+      settings.currentIndex = (settings.currentIndex + 1) % settings.musicQueue.length;
+      playSong();
+    });
+  } catch (e) {
+    replyMethod("Müzik başlatılırken hata oluştu.", true);
+  }
+}
+
+// Mesaj Komutları (Prefix: e!)
 client.on("messageCreate", async message => {
   if (!message.guild || message.author.bot) return;
   const content = message.content.trim();
-  const lower = content.toLowerCase();
   const settings = getSettings(message.guild.id);
-
-  const inviteRegex = /(discord\.(gg|io|me|li)|discordapp\.com\/invite|discord\.com\/invite)/i;
-  if (inviteRegex.test(content) && !hasStaffPermission(message.member)) {
-    try {
-      await message.delete();
-      await message.member.timeout(24 * 60 * 60 * 1000, "Reklam / Davet linki paylaşımı");
-      
-      if (settings.dcLogChannel) {
-        const logChan = message.guild.channels.cache.get(settings.dcLogChannel);
-        if (logChan) {
-          const embed = new EmbedBuilder()
-            .setColor(0xed4245)
-            .setTitle("🔇 OTOMATİK SUSTURMA (MUTE)")
-            .addFields(
-              { name: "👤 Cezalandırılan Üye", value: `${message.author} (<@${message.author.id}>)` },
-              { name: "🛡️ Yetkili", value: "Otomatik Sistem" },
-              { name: "⏰ Mute Süresi", value: "1 Gün" },
-              { name: "📄 Ceza Sebebi", value: "Sunucu / Davet Linki Paylaşımı" }
-            )
-            .setFooter({ text: `${BOT_NAME} Koruma Sistemi` })
-            .setTimestamp();
-          logChan.send({ embeds: [embed] });
-        }
-      }
-    } catch {}
-    return;
-  }
 
   if (!content.startsWith(PREFIX)) return;
   const args = content.slice(PREFIX.length).trim().split(/\s+/);
   const command = args.shift()?.toLowerCase();
 
-  // e!mute @kullanici 30m sebep (Görseldeki Detaylı Tasarım)
+  // e!başlat veya e!basla
+  if (command === "başlat" || command === "basla") {
+    return startMusicPlayer(message.guild, message.member, (text) => message.reply(text));
+  }
+
   if (command === "mute") {
     if (!hasStaffPermission(message.member)) return message.reply("Bu komut için yetkin yok.");
     const target = message.mentions.members.first();
@@ -223,55 +237,25 @@ client.on("messageCreate", async message => {
       message.reply("Bu üyeyi susturamadım.");
     }
   }
-
-  // e!basla (Müzik başlatma)
-  if (command === "basla") {
-    const voiceChannel = message.member.voice.channel;
-    if (!voiceChannel) return message.reply("Önce bir ses kanalına girmelisin!");
-
-    try {
-      settings.connection = joinVoiceChannel({
-        channelId: voiceChannel.id,
-        guildId: message.guild.id,
-        adapterCreator: message.guild.voiceAdapterCreator,
-      });
-
-      settings.player = createAudioPlayer();
-      settings.connection.subscribe(settings.player);
-
-      function playSong() {
-        const currentSong = settings.musicQueue[settings.currentIndex];
-        const resource = createAudioResource(currentSong.url);
-        settings.player.play(resource);
-        settings.isPlaying = true;
-      }
-
-      playSong();
-      message.reply("🎶 Müzik sistemi başlatıldı ve çalmaya başladı!");
-
-      settings.player.on(AudioPlayerStatus.Idle, () => {
-        settings.currentIndex = (settings.currentIndex + 1) % settings.musicQueue.length;
-        playSong();
-      });
-    } catch (e) {
-      message.reply("Müzik başlatılırken hata oluştu.");
-    }
-  }
 });
 
-// Slash Komutlar & Panel & Müzik Butonları
+// Slash Komutları & Buton Etkileşimleri
 client.on("interactionCreate", async interaction => {
   if (interaction.isChatInputCommand()) {
     const guild = interaction.guild;
     const member = interaction.member;
     const settings = getSettings(guild.id);
 
+    if (interaction.commandName === "başlat") {
+      return startMusicPlayer(guild, member, (text, ephemeral = false) => interaction.reply({ content: text, ephemeral }));
+    }
+
     if (interaction.commandName === "panel") {
       const embed = new EmbedBuilder()
         .setColor(0x1db954)
         .setTitle("🎵 Cubixorasmp Müzik Kontrol Paneli")
         .setDescription("Aşağıdaki düğmeleri kullanarak müziği başlatabilir, durdurabilir, sonraki veya önceki şarkıya geçebilirsin.")
-        .addFields({ name: "Şu anki Durum", value: settings.isPlaying ? "Çalıyor 🟢"  : "Durduruldu 🔴" })
+        .addFields({ name: "Şu anki Durum", value: settings.isPlaying ? "Çalıyor 🟢" : "Durduruldu 🔴" })
         .setFooter({ text: `${BOT_NAME} Müzik Sistemi` });
 
       const row = new ActionRowBuilder().addComponents(
@@ -293,7 +277,7 @@ client.on("interactionCreate", async interaction => {
       const embed = new EmbedBuilder().setColor(0x5865F2).setTitle("🎫 Destek Talebi (Ticket)").setDescription("Destek açmak için aşağıdaki butona tıkla.");
       const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("create_ticket").setLabel("Destek Talebi Aç").setStyle(ButtonStyle.Primary).setEmoji("🎫"));
       await channel.send({ embeds: [embed], components: [row] });
-      return interaction.reply({ content: `✅ Ticket sistemi ${channel} kanalına kurulanıldı!`, ephemeral: true });
+      return interaction.reply({ content: `✅ Ticket sistemi ${channel} kanalına kuruldu!`, ephemeral: true });
     }
 
     if (interaction.commandName === "dc-ceza") {
@@ -316,7 +300,6 @@ client.on("interactionCreate", async interaction => {
     const guild = interaction.guild;
     const settings = getSettings(guild.id);
 
-    // Müzik Paneli Butonları
     if (interaction.customId === "music_play") {
       if (settings.player) {
         settings.player.unpause();
@@ -344,7 +327,6 @@ client.on("interactionCreate", async interaction => {
       return interaction.reply({ content: "⏮️ Önceki şarkıya dönüldü.", ephemeral: true });
     }
 
-    // Ticket Butonları
     if (interaction.customId === "create_ticket") {
       await interaction.deferReply({ ephemeral: true });
       const ticketChannel = await guild.channels.create({
@@ -370,7 +352,6 @@ client.on("interactionCreate", async interaction => {
   }
 });
 
-// 7/24 Aktif Kalması İçin Web Sunucusu
 const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
