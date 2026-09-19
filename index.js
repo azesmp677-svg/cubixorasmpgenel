@@ -1,4 +1,16 @@
 require("dotenv").config();
+const express = require('express');
+const app = express();
+
+// Render ve UptimeRobot için web sunucusu (Port uyarısını çözer)
+app.get('/', (req, res) => {
+    res.send('Bot aktif ve müzik çalıyor!');
+});
+
+app.listen(3000, () => {
+    console.log('Web sunucusu 3000 portunda çalışıyor.');
+});
+
 const { Client, GatewayIntentBits } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 const ytdl = require('@distube/ytdl-core');
@@ -12,11 +24,11 @@ const client = new Client({
     ]
 });
 
-// Çalınacak Şarkı Listesi (30 adet YouTube linki ekleyebilirsin)
+// Çalınacak Şarkı Listesi (İstediğin kadar YouTube linki ekleyebilirsin)
 const sarkilar = [
     "https://www.youtube.com/watch?v=5qap5aO4i9A",
     "https://www.youtube.com/watch?v=jfKfPfyJRdk",
-    // Diğer şarkı linklerini buraya ekle
+    // Diğer şarkı linklerini buraya ekleyebilirsin
 ];
 
 client.once('ready', () => {
@@ -77,5 +89,4 @@ client.on('messageCreate', async message => {
     }
 });
 
-// Tokeni .env dosyasından güvenli bir şekilde alır
 client.login(process.env.TOKEN);
