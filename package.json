@@ -1,15 +1,7 @@
-{
-  "name": "cubixorasmp-bot",
-  "version": "1.0.0",
-  "description": "Cubixorasmp Guard ve Müzik Botu",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "@discordjs/voice": "^0.16.1",
-    "@distube/ytdl-core": "^4.15.8",
-    "discord.js": "^14.14.0",
-    "dotenv": "^16.4.5"
-  }
+"dependencies": {
+  "@distube/ytdl-core": "^version",
+  "@discordjs/voice": "^version",
+  "discord.js": "^version",
+  "dotenv": "^version",
+  "express": "^latest"
 }
