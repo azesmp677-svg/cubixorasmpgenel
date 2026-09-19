@@ -1,7 +1,16 @@
-"dependencies": {
-  "@distube/ytdl-core": "^version",
-  "@discordjs/voice": "^version",
-  "discord.js": "^version",
-  "dotenv": "^version",
-  "express": "^latest"
+{
+  "name": "discord-muzik-botu",
+  "version": "1.0.0",
+  "description": "7/24 Discord Music Bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.17.0",
+    "@distube/ytdl-core": "^4.16.4",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
 }
